@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AURA — DSN Control</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Rajdhani:wght@400;600;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#030810;--panel:#060d1a;--panel2:#0a1525;
+  --border:#162030;--teal:#00e5c8;--teal2:#028090;
+  --amber:#f0a500;--red:#e53535;--green:#22c55e;
+  --text:#a8c0d8;--muted:#3a5570;--white:#fff;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:'Rajdhani',sans-serif;color:var(--text);user-select:none;}
+#app{display:grid;grid-template-rows:48px 1fr 38px;grid-template-columns:200px 1fr 210px;width:100vw;height:100vh;}
+
+#topbar{
+  grid-column:1/-1;background:var(--panel);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;gap:12px;
+}
+.logo{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--teal);letter-spacing:2px;}
+.logo span{color:var(--white);font-weight:400;}
+#stage-box{display:flex;align-items:center;gap:8px;padding:5px 14px;border:1px solid var(--amber);border-radius:4px;background:rgba(240,165,0,.06);}
+#stage-num{font-family:'Space Mono',monospace;font-size:9px;color:var(--amber);letter-spacing:1px;}
+#stage-name{font-family:'Space Mono',monospace;font-size:10px;color:var(--white);}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+#sim-time{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);}
+
+#stage-track{
+  grid-column:1/-1;background:var(--panel);border-top:1px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;gap:0;
+}
+.st-step{display:flex;align-items:center;flex:1;min-width:0;}
+.st-dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--muted);background:transparent;flex-shrink:0;transition:all .3s;}
+.st-dot.done{background:var(--teal2);border-color:var(--teal2);}
+.st-dot.cur{background:var(--amber);border-color:var(--amber);box-shadow:0 0 7px var(--amber);}
+.st-lbl{font-size:8px;color:var(--muted);margin-left:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Space Mono',monospace;transition:color .3s;}
+.st-lbl.done{color:var(--teal2);}.st-lbl.cur{color:var(--amber);}
+.st-line{flex:1;height:1px;background:var(--border);margin:0 4px;transition:background .3s;}
+.st-line.done{background:var(--teal2);}
+
+#left{background:var(--panel);border-right:1px solid var(--border);padding:12px;display:flex;flex-direction:column;gap:7px;overflow:hidden;}
+.p-title{font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:2px;}
+.sat-card{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:7px 8px;transition:border-color .3s,box-shadow .3s;}
+.sat-card.s-active{border-color:var(--green);box-shadow:0 0 10px rgba(34,197,94,.12);}
+.sat-card.s-risk{border-color:var(--amber);box-shadow:0 0 10px rgba(240,165,0,.12);}
+.sat-card.s-failed{border-color:var(--red);box-shadow:0 0 10px rgba(229,53,53,.12);}
+.sat-card.s-candidate{border-color:var(--teal);box-shadow:0 0 10px rgba(0,229,200,.15);}
+.sat-head{display:flex;align-items:center;gap:5px;margin-bottom:5px;}
+.sat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.sat-id{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:var(--white);}
+.sat-nm{font-size:10px;color:var(--text);flex:1;}
+.badge{font-size:7px;font-family:'Space Mono',monospace;padding:2px 4px;border-radius:2px;text-transform:uppercase;}
+.ba{background:rgba(34,197,94,.12);color:var(--green);}
+.bs{background:rgba(58,85,112,.1);color:var(--muted);}
+.br{background:rgba(240,165,0,.12);color:var(--amber);}
+.bf{background:rgba(229,53,53,.12);color:var(--red);}
+.bc{background:rgba(0,229,200,.12);color:var(--teal);}
+.bar-row{display:flex;align-items:center;gap:5px;margin-top:3px;}
+.bl{font-size:8px;color:var(--muted);width:34px;font-family:'Space Mono',monospace;}
+.bt{flex:1;height:3px;background:rgba(255,255,255,.04);border-radius:2px;overflow:hidden;}
+.bfill{height:100%;border-radius:2px;transition:width .5s;}
+.bv{font-size:8px;color:var(--text);width:26px;text-align:right;font-family:'Space Mono',monospace;}
+
+#center{position:relative;overflow:hidden;background:var(--bg);}
+canvas{width:100%;height:100%;display:block;cursor:grab;}
+canvas:active{cursor:grabbing;}
+
+#banner{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);
+  background:rgba(6,13,26,.92);border:1px solid var(--amber);
+  border-radius:6px;padding:6px 18px;text-align:center;pointer-events:none;min-width:240px;
+}
+#b-step{font-family:'Space Mono',monospace;font-size:8px;color:var(--amber);letter-spacing:2px;margin-bottom:2px;}
+#b-desc{font-family:'Rajdhani',sans-serif;font-size:13px;color:var(--white);font-weight:600;}
+
+#hs-panel{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:rgba(6,13,26,.95);border:1px solid var(--amber);
+  border-radius:8px;padding:14px 28px;text-align:center;display:none;pointer-events:none;
+}
+#hs-title{font-family:'Space Mono',monospace;font-size:9px;color:var(--amber);letter-spacing:2px;margin-bottom:8px;}
+#hs-dots{display:flex;gap:10px;justify-content:center;margin-bottom:6px;}
+.hd{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--muted);transition:all .3s;}
+.hd.try{border-color:var(--amber);box-shadow:0 0 8px var(--amber);animation:hpulse .5s ease infinite alternate;}
+.hd.fail{border-color:var(--red);background:var(--red);animation:none;}
+@keyframes hpulse{from{opacity:.5}to{opacity:1}}
+#hs-msg{font-family:'Space Mono',monospace;font-size:9px;color:var(--text);}
+
+#statusbar{
+  position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+  background:rgba(6,13,26,.88);border:1px solid var(--border);
+  border-radius:6px;padding:5px 14px;display:flex;align-items:center;gap:12px;pointer-events:none;
+}
+.si{display:flex;align-items:center;gap:5px;font-size:9px;font-family:'Space Mono',monospace;}
+.sdot{width:6px;height:6px;border-radius:50%;}
+.sdiv{width:1px;height:12px;background:var(--border);}
+.rec{font-family:'Space Mono',monospace;font-size:9px;}
+.rec b{color:var(--teal);}
+
+#log-float{
+  position:absolute;bottom:50px;right:10px;width:230px;
+  background:rgba(4,10,22,.92);border:1px solid var(--teal2);
+  border-radius:8px;backdrop-filter:blur(12px);
+  box-shadow:0 0 20px rgba(0,229,200,.08);overflow:hidden;
+}
+#log-header{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--border);}
+#log-htitle{font-family:'Space Mono',monospace;font-size:8px;color:var(--teal);letter-spacing:2px;}
+#log-count{font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);}
+#log-entries{padding:6px 8px;display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--teal2) transparent;}
+.log-e{display:flex;gap:6px;animation:fi .25s ease;}
+.log-e .lt{font-family:'Space Mono',monospace;font-size:9px;color:var(--teal2);flex-shrink:0;}
+.log-e .lm{font-family:'Space Mono',monospace;font-size:9px;color:var(--text);}
+.log-e.warn .lm{color:var(--amber);}.log-e.err .lm{color:var(--red);}.log-e.ok .lm{color:var(--green);}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+#right{background:var(--panel);border-left:1px solid var(--border);padding:12px;display:flex;flex-direction:column;gap:7px;overflow:hidden;}
+.q-item{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:7px 8px;transition:all .35s;}
+.q-item.top{border-color:var(--teal);box-shadow:0 0 10px rgba(0,229,200,.15);}
+.q-row{display:flex;align-items:center;gap:6px;}
+.q-rank{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);width:14px;}
+.q-name{font-family:'Space Mono',monospace;font-size:10px;color:var(--white);font-weight:700;flex:1;}
+.q-sc{font-family:'Space Mono',monospace;font-size:10px;color:var(--teal);}
+.q-bar{height:3px;background:rgba(255,255,255,.04);border-radius:2px;overflow:hidden;margin-top:5px;}
+.q-bf{height:100%;background:var(--teal);border-radius:2px;transition:width .5s;}
+
+#stage-ctrl{margin-top:auto;border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:6px;}
+.ctrl-row{display:flex;gap:6px;}
+.ctrl-btn{flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:6px 0;font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;letter-spacing:.5px;transition:all .15s;text-align:center;}
+.ctrl-btn:hover{border-color:var(--teal);color:var(--teal);}
+.ctrl-btn.paused{border-color:var(--amber);color:var(--amber);}
+#in-range-box{text-align:center;font-family:'Space Mono',monospace;font-size:9px;padding:6px;border:1px solid var(--border);border-radius:4px;background:var(--panel2);color:var(--muted);transition:all .3s;}
+#in-range-box.has{border-color:var(--green);color:var(--green);background:rgba(34,197,94,.06);}
+#in-range-box.none{border-color:var(--red);color:var(--red);background:rgba(229,53,53,.06);}
+</style>
+</head>
+<body>
+<div id="app">
+
+<div id="topbar">
+  <div class="logo">AURA <span>/ DSN CONTROL</span></div>
+  <div id="stage-box">
+    <span id="stage-num">STAGE 0/7</span>
+    <span style="color:var(--border)">|</span>
+    <span id="stage-name">INITIALIZING</span>
+  </div>
+  <div class="tb-right">
+    <span id="sim-time">T+00:00</span>
+  </div>
+</div>
+
+<div id="left">
+  <div class="p-title">Satellite Status</div>
+  <div id="sat-list"></div>
+</div>
+
+<div id="center">
+  <canvas id="cv"></canvas>
+  <div id="banner"><div id="b-step">STAGE 1 OF 7</div><div id="b-desc">Normal Operation</div></div>
+  <div id="hs-panel">
+    <div id="hs-title">HANDSHAKE VERIFICATION</div>
+    <div id="hs-dots"><div class="hd" id="hd1"></div><div class="hd" id="hd2"></div><div class="hd" id="hd3"></div></div>
+    <div id="hs-msg">Contacting satellite…</div>
+  </div>
+  <div id="statusbar">
+    <div class="si"><div class="sdot" style="background:var(--green)"></div>Active</div>
+    <div class="si"><div class="sdot" style="background:var(--amber)"></div>At risk</div>
+    <div class="si"><div class="sdot" style="background:var(--red)"></div>Failed</div>
+    <div class="si"><div class="sdot" style="background:var(--teal)"></div>In range</div>
+    <div class="sdiv"></div>
+    <div class="rec">Recovered: <b id="rec-val">0s</b></div>
+  </div>
+  <div id="log-float">
+    <div id="log-header">
+      <span id="log-htitle">◈ SYSTEM LOG</span>
+      <span id="log-count">0 events</span>
+    </div>
+    <div id="log-entries"></div>
+  </div>
+</div>
+
+<div id="right">
+  <div class="p-title">Priority Queue</div>
+  <div id="queue-list"></div>
+  <div id="stage-ctrl">
+    <div class="p-title" style="margin-bottom:4px">Controls</div>
+    <div id="in-range-box">No satellites in range</div>
+    <div class="ctrl-row">
+      <div class="ctrl-btn" id="btn-pause" onclick="togglePause()">⏸ PAUSE</div>
+      <div class="ctrl-btn" style="border-color:var(--red);color:var(--red)" onclick="restartSim()">↺ RESTART</div>
+    </div>
+    <div class="ctrl-row">
+      <div class="ctrl-btn" onclick="prevStage()">◀ PREV</div>
+      <div class="ctrl-btn" onclick="nextStage()">NEXT ▶</div>
+    </div>
+  </div>
+</div>
+
+<div id="stage-track"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  SATELLITE DATA
+// ═══════════════════════════════════════════════════════
+const SATS = [
+  {id:'A', name:'SAT-ALPHA',   priority:88, backlog:40, vis:90},
+  {id:'B', name:'SAT-BETA',    priority:72, backlog:55, vis:80},
+  {id:'C', name:'SAT-GAMMA',   priority:91, backlog:80, vis:95},
+  {id:'D', name:'SAT-DELTA',   priority:65, backlog:30, vis:70},
+  {id:'E', name:'SAT-EPSILON', priority:78, backlog:60, vis:85},
+];
+
+// Fixed orbit speeds and elevation scales
+const SAT_SPEED  = {A:0.020, B:0.017, C:0.013, D:0.022, E:0.016};
+const SAT_ESCALE = {A:1.00,  B:0.84,  C:1.15,  D:0.92,  E:1.08};
+
+// Cone half-angle
+const CONE_DEG = 60;
+const CONE_RAD = CONE_DEG * Math.PI / 180;
+
+// Stage definitions
+const STAGES = [
+  {num:1, label:'Normal Op',   desc:'Normal Operation'},
+  {num:2, label:'Risk Detect', desc:'AI detects rising cancellation risk'},
+  {num:3, label:'Queue Rank',  desc:'Ranking standby satellites'},
+  {num:4, label:'Verify',      desc:'Fail-safe: 3-attempt handshake'},
+  {num:5, label:'Failure',     desc:'Connection FAILED — slot open'},
+  {num:6, label:'Reassign',    desc:'Instant reassignment'},
+  {num:7, label:'Recovered',   desc:'Window recovered — zero data lost'},
+];
+const STAGE_DUR = [0, 4500, 4500, 3500, 5500, 2500, 3500, 6000];
+
+// ═══════════════════════════════════════════════════════
+//  SCENARIO — rolled fresh each restart
+// ═══════════════════════════════════════════════════════
+let SC = {};
+
+function rollScenario() {
+  const ids = ['A','B','C','D','E'];
+
+  // Random active satellite
+  const activeId = ids[Math.floor(Math.random() * ids.length)];
+
+  // Rank the others by weighted score (descending)
+  const ranked = ids
+    .filter(id => id !== activeId)
+    .map(id => { const s = SATS.find(x=>x.id===id); return {id, score: s.priority*.5+s.vis*.3+s.backlog*.2}; })
+    .sort((a,b) => b.score - a.score);
+
+  // 35% chance: first replacement also fails → use #2
+  const doubleFail = Math.random() < 0.35;
+  const rep1 = ranked[0].id;
+  const rep2 = ranked[1].id;
+
+  // Risk threshold before AI flags (55–80%)
+  const riskThreshold = 55 + Math.floor(Math.random() * 26);
+
+  // Cluster jitter so sats start at slightly different positions
+  const jitter = (Math.random() - 0.5) * 0.5;
+
+  SC = { activeId, rep1, rep2, doubleFail, riskThreshold, jitter };
+  console.log('[AURA] Scenario:', SC);
+}
+
+// ═══════════════════════════════════════════════════════
+//  ORBITAL ANGLES — pure 2D circle, same plane
+// ═══════════════════════════════════════════════════════
+// Base angles so sats start clustered near top (-PI/2)
+const BASE = {A:-Math.PI/2, B:-Math.PI/2+0.30, C:-Math.PI/2-0.25, D:-Math.PI/2+0.55, E:-Math.PI/2-0.50};
+let INIT = {...BASE};  // adjusted at runtime for jitter + time offset
+const SIM_START = Date.now();
+let _pauseTime = 0;
+let _pausedAt  = 0;
+
+function getAngle(id) {
+  const elapsed = (Date.now() - SIM_START - _pauseTime) / 1000;
+  return INIT[id] + elapsed * SAT_SPEED[id];
+}
+
+function inRange(id) {
+  let a = getAngle(id) % (Math.PI*2);
+  if(a > Math.PI)  a -= Math.PI*2;
+  if(a < -Math.PI) a += Math.PI*2;
+  let d = Math.abs(a - (-Math.PI/2));
+  if(d > Math.PI) d = Math.PI*2 - d;
+  return d <= CONE_RAD;
+}
+
+function satXY(id, cx, cy, R) {
+  const a = getAngle(id);
+  const r = R * SAT_ESCALE[id];
+  return {x: cx + r*Math.cos(a), y: cy + r*Math.sin(a)};
+}
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let ST = {
+  stage: 0, paused: false, time: 0,
+  satSt: {A:'standby',B:'standby',C:'standby',D:'standby',E:'standby'},
+  riskVal: 5,     // risk of the currently active satellite
+  timers: [],
+  riskIv: null,
+  logN: 0,
+  _flash: false, _finalId: null, _rep1Failed: false, _lastInRange: null,
+};
+
+// ═══════════════════════════════════════════════════════
+//  CANVAS
+// ═══════════════════════════════════════════════════════
+const cv  = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let zoom=1, panX=0, panY=0, drag=false, lx=0, ly=0;
+
+function resize(){ cv.width=cv.offsetWidth; cv.height=cv.offsetHeight; }
+resize(); window.addEventListener('resize',resize);
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const d=e.deltaY<0?1.12:0.89, r=cv.getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  panX=mx-(mx-panX)*d; panY=my-(my-panY)*d;
+  zoom=Math.max(0.3,Math.min(5,zoom*d));
+},{passive:false});
+cv.addEventListener('mousedown',e=>{drag=true;lx=e.clientX;ly=e.clientY;});
+window.addEventListener('mouseup',()=>drag=false);
+window.addEventListener('mousemove',e=>{if(!drag)return;panX+=e.clientX-lx;panY+=e.clientY-ly;lx=e.clientX;ly=e.clientY;});
+
+// ═══════════════════════════════════════════════════════
+//  DRAW HELPERS
+// ═══════════════════════════════════════════════════════
+let _stars=null;
+function drawStars(W,H){
+  if(!_stars){_stars=[];for(let i=0;i<240;i++)_stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.1+.2,a:Math.random()*.6+.25});}
+  _stars.forEach(s=>{ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(180,210,255,${s.a})`;ctx.fill();});
+}
+
+function drawEarth(cx,cy,R){
+  ctx.save();
+  const g=ctx.createRadialGradient(cx-R*.3,cy-R*.3,R*.1,cx,cy,R);
+  g.addColorStop(0,'#0d2448');g.addColorStop(.5,'#081830');g.addColorStop(1,'#030d1e');
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+  const conts=[{ox:-.28,oy:-.05,rx:.17,ry:.27,rot:.1},{ox:.10,oy:.08,rx:.14,ry:.26,rot:.05},{ox:.06,oy:-.21,rx:.11,ry:.13,rot:-.15},{ox:.30,oy:-.1,rx:.20,ry:.18,rot:-.08},{ox:.36,oy:.26,rx:.09,ry:.08,rot:.2}];
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
+  conts.forEach(c=>{ctx.save();ctx.translate(cx+c.ox*R*2,cy+c.oy*R*2);ctx.rotate(c.rot);ctx.beginPath();ctx.ellipse(0,0,c.rx*R*2,c.ry*R*2,0,0,Math.PI*2);ctx.fillStyle='#0d3020';ctx.fill();ctx.restore();});
+  ctx.restore();
+  const sh=ctx.createRadialGradient(cx+R*.4,cy+R*.2,0,cx,cy,R);
+  sh.addColorStop(0,'rgba(0,0,0,0)');sh.addColorStop(.6,'rgba(0,0,0,.1)');sh.addColorStop(1,'rgba(0,0,0,.6)');
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=sh;ctx.fill();
+  const sp=ctx.createRadialGradient(cx-R*.35,cy-R*.35,0,cx-R*.35,cy-R*.35,R*.7);
+  sp.addColorStop(0,'rgba(100,170,255,.13)');sp.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=sp;ctx.fill();
+  const atm=ctx.createRadialGradient(cx,cy,R*.88,cx,cy,R*1.13);
+  atm.addColorStop(0,'rgba(30,90,200,0)');atm.addColorStop(.5,'rgba(30,90,200,.1)');atm.addColorStop(1,'rgba(30,90,200,0)');
+  ctx.beginPath();ctx.arc(cx,cy,R*1.13,0,Math.PI*2);ctx.fillStyle=atm;ctx.fill();
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.strokeStyle='rgba(40,100,220,.5)';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.restore();
+}
+
+function drawCone(cx,cy,R,maxR){
+  ctx.save();
+  const ay=cy-R, reach=maxR*1.06;
+  const aL=-Math.PI/2-CONE_RAD, aR=-Math.PI/2+CONE_RAD;
+  ctx.beginPath();ctx.moveTo(cx,ay);ctx.lineTo(cx+reach*Math.cos(aL),ay+reach*Math.sin(aL));
+  ctx.arc(cx,ay,reach,aL,aR);ctx.closePath();
+  ctx.fillStyle='rgba(0,229,200,0.04)';ctx.fill();
+  [aL,aR].forEach(a=>{
+    ctx.beginPath();ctx.moveTo(cx,ay);ctx.lineTo(cx+reach*Math.cos(a),ay+reach*Math.sin(a));
+    ctx.strokeStyle='rgba(0,229,200,0.3)';ctx.lineWidth=1;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
+  });
+  ctx.beginPath();ctx.arc(cx,ay,reach,aL,aR);
+  ctx.strokeStyle='rgba(0,229,200,0.15)';ctx.lineWidth=1;ctx.setLineDash([2,6]);ctx.stroke();ctx.setLineDash([]);
+  const rx=cx+reach*Math.cos(aR), ry=ay+reach*Math.sin(aR);
+  ctx.font='bold 9px "Space Mono"';ctx.fillStyle='rgba(0,229,200,0.5)';ctx.textAlign='left';
+  ctx.fillText(`±${CONE_DEG}° receive zone`,rx+8,(ay+ry)/2+4);
+  ctx.restore();
+}
+
+function drawOrbits(cx,cy,R){
+  ctx.save();
+  [0.84,0.92,1.00,1.08,1.15].forEach(sc=>{
+    ctx.beginPath();ctx.arc(cx,cy,R*sc,0,Math.PI*2);
+    ctx.strokeStyle='rgba(22,32,56,0.8)';ctx.lineWidth=1;ctx.setLineDash([2,9]);ctx.stroke();ctx.setLineDash([]);
+  });
+  ctx.restore();
+}
+
+function drawAntenna(cx,cy,R){
+  const x=cx,y=cy-R;
+  ctx.save();
+  ctx.fillStyle='#1e3a5a';ctx.fillRect(x-2,y,4,10);
+  ctx.beginPath();ctx.ellipse(x,y,18,7,0,0,Math.PI,true);
+  ctx.strokeStyle='#3a6090';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#0d1e30';ctx.fill();
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y-14);ctx.strokeStyle='#00e5c8';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.beginPath();ctx.arc(x,y-14,2.5,0,Math.PI*2);ctx.fillStyle='#00e5c8';ctx.fill();
+  const t=Date.now()/1000;
+  const sw=-Math.PI/2+Math.sin(t*1.1)*(CONE_RAD-0.15);
+  ctx.save();ctx.translate(x,y-6);
+  ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,48,sw-.22,sw+.22);ctx.closePath();
+  ctx.fillStyle='rgba(0,229,200,0.07)';ctx.fill();
+  ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,48,sw-.02,sw+.02);
+  ctx.strokeStyle='rgba(0,229,200,0.55)';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.restore();ctx.restore();
+}
+
+function drawSat(x,y,id,ir){
+  const st=ST.satSt[id];
+  let col='#3a5070';
+  if(st==='active')     col='#22c55e';
+  else if(st==='risk')  col=(ST._flash&&Math.floor(Date.now()/180)%2===1)?'#ffdd00':'#f0a500';
+  else if(st==='failed')col='#e53535';
+  else if(st==='candidate') col='#00e5c8';
+  else if(ir) col='rgba(0,229,200,0.55)';
+
+  ctx.save();
+  ctx.globalAlpha=ir?1.0:0.38;
+  if(st!=='standby'||(ir&&st==='standby')){
+    const g=ctx.createRadialGradient(x,y,3,x,y,26);
+    g.addColorStop(0,col.startsWith('rgba')?'rgba(0,229,200,0.15)':col+'22');g.addColorStop(1,'transparent');
+    ctx.beginPath();ctx.arc(x,y,26,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+  }
+  ctx.fillStyle='#0c1e35';ctx.strokeStyle=col;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.roundRect(x-13,y-7,26,14,3);ctx.fill();ctx.stroke();
+  ctx.fillStyle=ir?'rgba(30,80,200,0.75)':'rgba(20,50,100,0.45)';
+  ctx.fillRect(x-29,y-4,14,8);ctx.fillRect(x+15,y-4,14,8);
+  ctx.strokeStyle='rgba(50,90,200,0.4)';ctx.lineWidth=.5;
+  ctx.strokeRect(x-29,y-4,14,8);ctx.strokeRect(x+15,y-4,14,8);
+  for(let i=1;i<3;i++){
+    ctx.beginPath();ctx.moveTo(x-29+i*4.7,y-4);ctx.lineTo(x-29+i*4.7,y+4);
+    ctx.strokeStyle='rgba(50,90,200,.3)';ctx.lineWidth=.4;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x+15+i*4.7,y-4);ctx.lineTo(x+15+i*4.7,y+4);ctx.stroke();
+  }
+  ctx.fillStyle=col;ctx.font='bold 8px "Space Mono"';ctx.textAlign='center';ctx.fillText(id,x,y+3);
+  if(ir&&st==='standby'){
+    ctx.beginPath();ctx.arc(x,y,22,0,Math.PI*2);
+    ctx.strokeStyle='rgba(0,229,200,0.28)';ctx.lineWidth=1;ctx.setLineDash([2,4]);ctx.stroke();ctx.setLineDash([]);
+  }
+  ctx.globalAlpha=1;ctx.restore();
+}
+
+function drawLink(ax,ay,bx,by,type){
+  ctx.save();
+  if(type==='active'){
+    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.strokeStyle='#22c55e';ctx.lineWidth=2;ctx.stroke();
+    const p=((Date.now()/800)%1);
+    const px=ax+(bx-ax)*p,py=ay+(by-ay)*p;
+    ctx.beginPath();ctx.arc(px,py,3,0,Math.PI*2);ctx.fillStyle='#22c55e';ctx.fill();
+    ctx.beginPath();ctx.arc(px,py,6,0,Math.PI*2);ctx.fillStyle='rgba(34,197,94,0.2)';ctx.fill();
+  } else if(type==='risk'){
+    if(ST._flash&&Math.floor(Date.now()/200)%2===1){ctx.restore();return;}
+    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.strokeStyle='#f0a500';ctx.lineWidth=1.5;ctx.setLineDash([7,5]);ctx.stroke();ctx.setLineDash([]);
+  } else if(type==='failed'){
+    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.strokeStyle='#e53535';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
+  } else if(type==='candidate'){
+    ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.strokeStyle='rgba(0,229,200,0.55)';ctx.lineWidth=1;ctx.setLineDash([3,6]);ctx.stroke();ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER LOOP
+// ═══════════════════════════════════════════════════════
+function render(){
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle='#030810';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.translate(panX,panY);ctx.scale(zoom,zoom);
+
+  const cx=(W/2-panX)/zoom, cy=(H/2-panY)/zoom+H*0.05/zoom;
+  const earthR=Math.min(W,H)*0.185;
+  const orbitR=earthR*2.1;
+  const maxR=orbitR*1.15;
+  const ax=cx, ay=cy-earthR;
+
+  drawStars(W/zoom,H/zoom);
+  drawOrbits(cx,cy,orbitR);
+  drawCone(cx,cy,earthR,maxR);
+  drawEarth(cx,cy,earthR);
+  drawAntenna(cx,cy,earthR);
+
+  // Positions
+  const pos={};
+  SATS.forEach(s=>{ pos[s.id]=satXY(s.id,cx,cy,orbitR); });
+
+  // ── LINKS — only draw if satellite is IN RANGE ──────────────────
+  const stg=ST.stage;
+  const actId=SC.activeId;
+
+  if(stg>=1 && stg<=5 && actId){
+    // Only link if active sat is currently in the cone
+    if(inRange(actId)){
+      const p=pos[actId];
+      const lt= stg===1?'active': stg<=4?'risk':'failed';
+      drawLink(ax,ay,p.x,p.y,lt);
+    }
+  }
+
+  // Candidate links
+  if(stg>=3 && stg<6){
+    [SC.rep1, SC.rep2].forEach(id=>{
+      if(id && ST.satSt[id]==='candidate' && inRange(id))
+        drawLink(ax,ay,pos[id].x,pos[id].y,'candidate');
+    });
+  }
+
+  // Final active link (stage 6+)
+  if(stg>=6){
+    const finalId=ST._finalId;
+    if(finalId && inRange(finalId)) drawLink(ax,ay,pos[finalId].x,pos[finalId].y,'active');
+  }
+
+  // ── SATELLITES ──────────────────────────────────────────────────
+  SATS.forEach(s=>{ const p=pos[s.id]; drawSat(p.x,p.y,s.id,inRange(s.id)); });
+
+  ctx.restore();
+
+  // In-range indicator + track changes for logging
+  const ir=SATS.filter(s=>inRange(s.id));
+  const irIds=ir.map(s=>s.id).join(',');
+  const box=document.getElementById('in-range-box');
+  if(ir.length){ box.className='has'; box.textContent='In range: '+ir.map(s=>s.id).join(', '); }
+  else { box.className='none'; box.textContent='No satellites in range'; }
+
+  // Log when active or final sat enters/leaves cone (once per event)
+  if(ST.stage>=1){
+    const watchId = ST.stage>=6 ? ST._finalId : SC.activeId;
+    if(watchId){
+      const nowIn=inRange(watchId);
+      if(nowIn !== ST._lastInRange){
+        ST._lastInRange=nowIn;
+        if(!nowIn && ST.stage>=1 && ST.stage<7)
+          addLog(`${SATS.find(x=>x.id===watchId).name}: left receive zone`,'warn');
+        else if(nowIn && ST.stage>=1)
+          addLog(`${SATS.find(x=>x.id===watchId).name}: entered receive zone`,'ok');
+      }
+    }
+  }
+
+  requestAnimationFrame(render);
+}
+
+// ═══════════════════════════════════════════════════════
+//  UI
+// ═══════════════════════════════════════════════════════
+function satColor(st){ return {active:'#22c55e',risk:'#f0a500',failed:'#e53535',candidate:'#00e5c8',standby:'#3a5570'}[st]||'#3a5570'; }
+function badgeCls(st){ return {active:'ba',standby:'bs',risk:'br',failed:'bf',candidate:'bc'}[st]||'bs'; }
+function cardCls(st){ return {active:'s-active',risk:'s-risk',failed:'s-failed',candidate:'s-candidate'}[st]||''; }
+
+function buildCards(){
+  let h='';
+  SATS.forEach(s=>{
+    const st=ST.satSt[s.id];
+    const rv=s.id===SC.activeId?ST.riskVal:s.id===SC.rep1&&ST._rep1Failed?85:8;
+    const rc=rv<35?'#22c55e':rv<65?'#f0a500':'#e53535';
+    h+=`<div class="sat-card ${cardCls(st)}">
+      <div class="sat-head">
+        <div class="sat-dot" style="background:${satColor(st)}"></div>
+        <span class="sat-id">${s.id}</span><span class="sat-nm">${s.name.replace('SAT-','')}</span>
+        <span class="badge ${badgeCls(st)}">${st}</span>
+      </div>
+      <div class="bar-row"><span class="bl">RISK</span><div class="bt"><div class="bfill" style="width:${rv}%;background:${rc}"></div></div><span class="bv">${rv}%</span></div>
+      <div class="bar-row"><span class="bl">PRIOR</span><div class="bt"><div class="bfill" style="width:${s.priority}%;background:#00e5c8"></div></div><span class="bv">${s.priority}</span></div>
+    </div>`;
+  });
+  document.getElementById('sat-list').innerHTML=h;
+}
+
+function buildQueue(){
+  const list=SATS.filter(s=>s.id!==SC.activeId)
+    .map(s=>({id:s.id,name:s.name,score:Math.round(s.priority*.5+s.vis*.3+s.backlog*.2)}))
+    .sort((a,b)=>b.score-a.score);
+  let h='';
+  list.forEach((s,i)=>{
+    const top=i===0&&ST.stage>=3;
+    h+=`<div class="q-item ${top?'top':''}">
+      <div class="q-row"><span class="q-rank">${i+1}</span><span class="q-name">${s.name}</span><span class="q-sc">${s.score}</span></div>
+      <div class="q-bar"><div class="q-bf" style="width:${s.score}%"></div></div>
+    </div>`;
+  });
+  document.getElementById('queue-list').innerHTML=h;
+}
+
+function buildTrack(){
+  let h='';
+  STAGES.forEach((s,i)=>{
+    const done=ST.stage>s.num, cur=ST.stage===s.num;
+    h+=`<div class="st-step">
+      <div class="st-dot ${done?'done':cur?'cur':''}"></div>
+      <span class="st-lbl ${done?'done':cur?'cur':''}">${s.label}</span>
+      ${i<STAGES.length-1?`<div class="st-line ${done?'done':''}"></div>`:''}
+    </div>`;
+  });
+  document.getElementById('stage-track').innerHTML=h;
+}
+
+function setBanner(n,overrideDesc){
+  const s=STAGES[n-1]||{};
+  document.getElementById('b-step').textContent=`STAGE ${n} OF 7`;
+  document.getElementById('b-desc').textContent=overrideDesc||s.desc||'';
+  document.getElementById('stage-num').textContent=`STAGE ${n}/7`;
+  document.getElementById('stage-name').textContent=(s.label||'').toUpperCase();
+  buildTrack();
+}
+
+let logN=0;
+function addLog(msg,type=''){
+  const el=document.getElementById('log-entries');
+  const mm=Math.floor(ST.time/60),ss=ST.time%60;
+  const d=document.createElement('div');
+  d.className=`log-e ${type}`;
+  d.innerHTML=`<span class="lt">T+${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}</span><span class="lm">${msg}</span>`;
+  el.prepend(d);
+  logN++;
+  document.getElementById('log-count').textContent=`${logN} events`;
+  while(el.children.length>12)el.removeChild(el.lastChild);
+}
+
+// ═══════════════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════════════
+function togglePause(){
+  ST.paused=!ST.paused;
+  const btn=document.getElementById('btn-pause');
+  if(ST.paused){
+    _pausedAt=Date.now();
+    ST.timers.forEach(clearTimeout);ST.timers=[];
+    if(ST.riskIv){clearInterval(ST.riskIv);ST.riskIv=null;}
+    btn.textContent='▶ RESUME';btn.classList.add('paused');
+  } else {
+    _pauseTime+=Date.now()-_pausedAt;
+    btn.textContent='⏸ PAUSE';btn.classList.remove('paused');
+    runStage(ST.stage,true); // resume current
+  }
+}
+function prevStage(){ if(ST.stage<=1)return; clearAllTimers(); runStage(ST.stage-1,true); }
+function nextStage(){ if(ST.stage>=7)return; clearAllTimers(); runStage(ST.stage+1,true); }
+
+function clearAllTimers(){
+  ST.timers.forEach(clearTimeout);ST.timers=[];
+  if(ST.riskIv){clearInterval(ST.riskIv);ST.riskIv=null;}
+}
+function tm(fn,ms){ const id=setTimeout(fn,ms); ST.timers.push(id); return id; }
+
+function restartSim(){
+  clearAllTimers();
+  rollScenario();
+  ST={stage:0,paused:false,time:0,
+      satSt:{A:'standby',B:'standby',C:'standby',D:'standby',E:'standby'},
+      riskVal:5,timers:[],riskIv:null,logN:0,
+      _flash:false,_finalId:null,_rep1Failed:false,_lastInRange:null};
+  _pauseTime=0;_pausedAt=0;
+  // Reset angles with jitter
+  const now=(Date.now()-SIM_START)/1000;
+  SATS.forEach(s=>{ INIT[s.id]=BASE[s.id]+SC.jitter-now*SAT_SPEED[s.id]; });
+  document.getElementById('btn-pause').textContent='⏸ PAUSE';
+  document.getElementById('btn-pause').classList.remove('paused');
+  document.getElementById('rec-val').textContent='0s';
+  document.getElementById('log-entries').innerHTML='';
+  document.getElementById('hs-panel').style.display='none';
+  logN=0;document.getElementById('log-count').textContent='0 events';
+  buildCards();buildQueue();buildTrack();
+  tm(()=>runStage(1),400);
+}
+
+// ═══════════════════════════════════════════════════════
+//  SIMULATION — clean, linear, no confusion
+// ═══════════════════════════════════════════════════════
+function runStage(n, manual=false){
+  if(ST.paused&&!manual) return;
+  ST.stage=n;
+  setBanner(n);
+
+  if(n===1){
+    // Set active satellite from scenario
+    const s={A:'standby',B:'standby',C:'standby',D:'standby',E:'standby'};
+    s[SC.activeId]='active';
+    ST.satSt=s; ST.riskVal=5; ST._flash=false; ST._finalId=null; ST._rep1Failed=false;
+    buildCards();buildQueue();
+    setBanner(1, `Normal Operation — ${SATS.find(x=>x.id===SC.activeId).name} connected`);
+    addLog(`${SATS.find(x=>x.id===SC.activeId).name}: active link`,'ok');
+    addLog('All other satellites: standby');
+    if(!manual) tm(()=>runStage(2), STAGE_DUR[1]);
+  }
+  else if(n===2){
+    ST.satSt[SC.activeId]='risk'; ST._flash=true;
+    buildCards();
+    addLog(`AI: anomaly detected on ${SATS.find(x=>x.id===SC.activeId).name}`,'warn');
+    addLog('Risk score climbing…','warn');
+    if(ST.riskIv) clearInterval(ST.riskIv);
+    ST.riskIv=setInterval(()=>{
+      if(ST.paused) return;
+      ST.riskVal=Math.min(ST.riskVal+4, SC.riskThreshold+5);
+      buildCards();
+      if(ST.riskVal>=SC.riskThreshold+5){clearInterval(ST.riskIv);ST.riskIv=null;}
+    },110);
+    if(!manual) tm(()=>runStage(3), STAGE_DUR[2]);
+  }
+  else if(n===3){
+    ST.satSt[SC.rep1]='candidate';
+    if(SC.doubleFail) ST.satSt[SC.rep2]='candidate';
+    buildCards();buildQueue();
+    addLog('Ranking standby satellites…');
+    addLog(`#1: ${SATS.find(x=>x.id===SC.rep1).name}`,'ok');
+    if(SC.doubleFail) addLog(`#2: ${SATS.find(x=>x.id===SC.rep2).name} on standby`);
+    if(!manual) tm(()=>runStage(4), STAGE_DUR[3]);
+  }
+  else if(n===4){
+    const hsp=document.getElementById('hs-panel');
+    hsp.style.display='block';
+    ['hd1','hd2','hd3'].forEach(id=>{const e=document.getElementById(id);e.className='hd';e.style.display='block';});
+    document.getElementById('hs-msg').textContent=`Contacting ${SATS.find(x=>x.id===SC.activeId).name}…`;
+    addLog('Initiating 3-attempt handshake…','warn');
+    tm(()=>{if(ST.paused)return;document.getElementById('hd1').className='hd try';addLog('Attempt 1/3 → no response','warn');},600);
+    tm(()=>{if(ST.paused)return;document.getElementById('hd1').className='hd fail';document.getElementById('hd2').className='hd try';addLog('Attempt 2/3 → no response','warn');},2000);
+    tm(()=>{if(ST.paused)return;document.getElementById('hd2').className='hd fail';document.getElementById('hd3').className='hd try';addLog('Attempt 3/3 → no response','warn');},3500);
+    tm(()=>{if(ST.paused)return;document.getElementById('hd3').className='hd fail';document.getElementById('hs-msg').textContent='FAILURE CONFIRMED';},4800);
+    if(!manual) tm(()=>runStage(5), 5200);
+  }
+  else if(n===5){
+    document.getElementById('hs-panel').style.display='none';
+    ST.satSt[SC.activeId]='failed'; ST._flash=false;
+    buildCards();
+    addLog(`${SATS.find(x=>x.id===SC.activeId).name}: FAILURE CONFIRMED`,'err');
+
+    if(SC.doubleFail){
+      // First replacement also fails → show second handshake
+      addLog(`Trying #1: ${SATS.find(x=>x.id===SC.rep1).name}…`,'warn');
+      const hsp=document.getElementById('hs-panel');
+      tm(()=>{
+        if(ST.paused)return;
+        hsp.style.display='block';
+        ['hd1','hd2','hd3'].forEach(id=>{const e=document.getElementById(id);e.className='hd';e.style.display='block';});
+        document.getElementById('hs-msg').textContent=`Contacting ${SATS.find(x=>x.id===SC.rep1).name}…`;
+        addLog(`Attempt 1/3 → no response`,'warn');
+      },600);
+      tm(()=>{if(ST.paused)return;document.getElementById('hd1').className='hd try';},700);
+      tm(()=>{if(ST.paused)return;document.getElementById('hd1').className='hd fail';document.getElementById('hd2').className='hd try';addLog('Attempt 2/3 → no response','warn');},1800);
+      tm(()=>{if(ST.paused)return;document.getElementById('hd2').className='hd fail';document.getElementById('hd3').className='hd try';addLog('Attempt 3/3 → no response','warn');},3000);
+      tm(()=>{
+        if(ST.paused)return;
+        document.getElementById('hd3').className='hd fail';
+        document.getElementById('hs-msg').textContent='ALSO FAILED';
+        ST.satSt[SC.rep1]='failed'; ST._rep1Failed=true;
+        buildCards();
+        addLog(`${SATS.find(x=>x.id===SC.rep1).name}: ALSO FAILED — escalating to #2`,'err');
+        addLog(`Reassigning to ${SATS.find(x=>x.id===SC.rep2).name}`,'warn');
+      },4200);
+      tm(()=>{if(ST.paused)return;hsp.style.display='none';},4600);
+      if(!manual) tm(()=>runStage(6), 5000);
+    } else {
+      addLog(`Slot open — reassigning to ${SATS.find(x=>x.id===SC.rep1).name}`,'warn');
+      if(!manual) tm(()=>runStage(6), STAGE_DUR[5]);
+    }
+  }
+  else if(n===6){
+    document.getElementById('hs-panel').style.display='none';
+    const finalId=SC.doubleFail?SC.rep2:SC.rep1;
+    ST._finalId=finalId;
+    ST.satSt[finalId]='active';
+    buildCards();buildQueue();
+    const nm=SATS.find(x=>x.id===finalId).name;
+    addLog(`Reassigning → ${nm}…`);
+    tm(()=>addLog(`${nm}: link established`,'ok'),600);
+    const rec=2+Math.floor(Math.random()*7);
+    document.getElementById('rec-val').textContent=`~${rec} min`;
+    setBanner(6, `Reassigned to ${nm}`);
+    if(!manual) tm(()=>runStage(7), STAGE_DUR[6]);
+  }
+  else if(n===7){
+    addLog('Window RECOVERED','ok');
+    addLog('Data loss: NONE','ok');
+    addLog('Efficiency: 100%','ok');
+    setBanner(7,'Window recovered — zero antenna time lost');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════════════════════════
+setInterval(()=>{
+  if(!ST.paused){
+    ST.time++;
+    const mm=Math.floor(ST.time/60),ss=ST.time%60;
+    document.getElementById('sim-time').textContent=
+      `T+${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  }
+},1000);
+
+// ═══════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════
+rollScenario();
+// Apply jitter to initial angles (relative to current elapsed time)
+(()=>{
+  const now=(Date.now()-SIM_START)/1000;
+  SATS.forEach(s=>{ INIT[s.id]=BASE[s.id]+SC.jitter-now*SAT_SPEED[s.id]; });
+})();
+buildCards(); buildQueue(); buildTrack();
+render();
+setTimeout(()=>runStage(1),600);
+</script>
+</body>
+</html>
